@@ -11,7 +11,7 @@ from app.models import (
 from app.schemas import (
     OfferCreate, CounterOfferCreate, VoteRequest, NegotiationResponse
 )
-from app.auth import get_current_user
+from app.auth import get_current_user, require_buyer
 from app.config import settings
 from app.engine.logistics import calculate_shared_transport_savings
 
@@ -25,15 +25,15 @@ def _format_negotiation_response(
     team = db.query(Team).filter(Team.id == neg.team_id).first()
     buyer = db.query(User).filter(User.id == neg.buyer_id).first()
     members = db.query(TeamMember).filter(TeamMember.team_id == neg.team_id).all()
-    total_kg = sum(m.contributed_kg for m in members)
+    total_kg = sum(m.contributed_kg for m in members) if members else 0.0
 
     active_price = neg.final_agreed_price_per_kg or neg.counter_price_per_kg or neg.offered_price_per_kg
     gross_total = round(total_kg * active_price, 2)
     
     # Calculate estimated freight & platform fee
-    freight = neg.transport_cost_total or (total_kg * 0.5)  # approx ₹0.50/kg
+    freight = neg.transport_cost_total or (total_kg * 0.5)
     fee = round(gross_total * (settings.DEFAULT_PLATFORM_FEE_PERCENT / 100.0), 2)
-    net_distributable = max(0.0, gross_total - freight - fee)
+    net_distributable = max(0.0, round(gross_total - freight - fee, 2))
 
     # Count approved votes among members
     approved_votes = sum(1 for m in members if m.vote_status == "approved")
@@ -66,19 +66,31 @@ def _format_negotiation_response(
 @router.post("/offer", response_model=NegotiationResponse)
 def create_buyer_offer(
     req: OfferCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_buyer),
     db: Session = Depends(get_db)
 ):
-    if current_user.role != "buyer":
-        raise HTTPException(status_code=403, detail="Only registered buyers can initiate purchase offers")
+    if req.offered_price_per_kg <= 0:
+        raise HTTPException(status_code=400, detail="Offered price must be greater than zero")
 
     team = db.query(Team).filter(Team.id == req.team_id).first()
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
 
+    if team.status in ["selling", "sold", "payment_processing", "completed"]:
+        raise HTTPException(status_code=400, detail=f"Cannot make offer to team with status '{team.status}' (already committed or sold)")
+
     members = db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
     if not members:
         raise HTTPException(status_code=400, detail="Team has no registered members")
+
+    # Check for existing active negotiation from this buyer for this team
+    existing_active = db.query(CollectiveNegotiation).filter(
+        CollectiveNegotiation.team_id == team.id,
+        CollectiveNegotiation.buyer_id == current_user.id,
+        CollectiveNegotiation.status.in_(["offer_received", "counter_sent", "voting"])
+    ).first()
+    if existing_active:
+        raise HTTPException(status_code=400, detail="You already have an active negotiation with this team")
 
     total_kg = sum(m.contributed_kg for m in members)
     freight_calc = calculate_shared_transport_savings(len(members), total_kg)
@@ -90,15 +102,15 @@ def create_buyer_offer(
         team_id=team.id,
         buyer_id=current_user.id,
         buyer_requirement_id=req.buyer_requirement_id,
-        offered_price_per_kg=req.offered_price_per_kg,
+        offered_price_per_kg=float(req.offered_price_per_kg),
         transport_cost_total=transport_cost,
         platform_fee_total=fee,
         status="offer_received",
-        notes=req.notes
+        notes=req.notes.strip() if req.notes else None
     )
     db.add(neg)
 
-    # Reset member vote statuses to pending
+    # Reset member vote statuses to pending for this negotiation
     for m in members:
         m.vote_status = "pending"
 
@@ -108,7 +120,7 @@ def create_buyer_offer(
         title="New Purchase Offer Received!",
         message=f"Buyer {current_user.business_name or current_user.full_name} offered ₹{req.offered_price_per_kg}/kg for team lot of {total_kg:g} kg {team.crop}.",
         category="offer",
-        link=f"/dashboard/negotiations"
+        link=f"/dashboard/teams/{team.id}"
     )
     db.add(notif)
 
@@ -123,18 +135,24 @@ def send_counter_offer(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    if req.counter_price_per_kg <= 0:
+        raise HTTPException(status_code=400, detail="Counter price must be greater than zero")
+
     neg = db.query(CollectiveNegotiation).filter(CollectiveNegotiation.id == neg_id).first()
     if not neg:
         raise HTTPException(status_code=404, detail="Negotiation not found")
+
+    if neg.status not in ["offer_received", "counter_sent", "voting"]:
+        raise HTTPException(status_code=400, detail=f"Cannot counter a negotiation that is '{neg.status}'")
 
     team = db.query(Team).filter(Team.id == neg.team_id).first()
     if team.representative_id != current_user.id:
         raise HTTPException(status_code=403, detail="Only the Team Representative can send a counter-offer on behalf of the collective team")
 
-    neg.counter_price_per_kg = req.counter_price_per_kg
+    neg.counter_price_per_kg = float(req.counter_price_per_kg)
     neg.status = "counter_sent"
     if req.notes:
-        neg.notes = f"{neg.notes or ''}\nRepresentative: {req.notes}".strip()
+        neg.notes = f"{neg.notes or ''}\nRepresentative: {req.notes.strip()}".strip()
 
     # Reset member votes
     members = db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
@@ -166,6 +184,9 @@ def vote_on_offer(
     if not neg:
         raise HTTPException(status_code=404, detail="Negotiation not found")
 
+    if neg.status not in ["offer_received", "counter_sent", "voting"]:
+        raise HTTPException(status_code=400, detail="Voting is only allowed on active negotiations")
+
     member = db.query(TeamMember).filter(
         TeamMember.team_id == neg.team_id,
         TeamMember.farmer_id == current_user.id
@@ -173,7 +194,7 @@ def vote_on_offer(
     if not member:
         raise HTTPException(status_code=403, detail="Only verified team members can vote on collective offers")
 
-    member.vote_status = req.vote.lower()
+    member.vote_status = req.vote.strip().lower()
     neg.status = "voting"
     db.commit()
 
@@ -189,6 +210,9 @@ def accept_negotiation(
     if not neg:
         raise HTTPException(status_code=404, detail="Negotiation not found")
 
+    if neg.status in ["deal_agreed", "rejected", "cancelled"]:
+        raise HTTPException(status_code=400, detail=f"Negotiation is already in '{neg.status}' state")
+
     team = db.query(Team).filter(Team.id == neg.team_id).first()
     members = db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
 
@@ -199,21 +223,21 @@ def accept_negotiation(
         team.status = "selling"
     # If team representative is accepting buyer's offer
     elif current_user.id == team.representative_id:
-        # Check consensus: require at least majority (>50%) approval
-        approved_count = sum(1 for m in members if m.vote_status == "approved")
-        # If rep is accepting, rep implicitly approves
-        if approved_count == 0 and len(members) > 1:
-            # Let representative approve their own vote
-            rep_member = next((m for m in members if m.farmer_id == current_user.id), None)
-            if rep_member:
-                rep_member.vote_status = "approved"
-                approved_count += 1
-
+        # Rep accepts
         neg.final_agreed_price_per_kg = neg.offered_price_per_kg
         neg.status = "deal_agreed"
         team.status = "selling"
     else:
         raise HTTPException(status_code=403, detail="Unauthorized to accept this negotiation")
+
+    # Reject / cancel any other pending negotiations for this team to prevent double selling
+    other_negs = db.query(CollectiveNegotiation).filter(
+        CollectiveNegotiation.team_id == team.id,
+        CollectiveNegotiation.id != neg.id,
+        CollectiveNegotiation.status.in_(["offer_received", "counter_sent", "voting"])
+    ).all()
+    for o_neg in other_negs:
+        o_neg.status = "rejected"
 
     # Notify all members
     for m in members:
@@ -222,7 +246,7 @@ def accept_negotiation(
             title="Collective Sale Deal Confirmed!",
             message=f"Deal agreed at ₹{neg.final_agreed_price_per_kg}/kg for Team '{team.name}'. Awaiting buyer payment completion.",
             category="sale",
-            link="/dashboard/team"
+            link=f"/dashboard/teams/{team.id}"
         )
         db.add(notif)
 

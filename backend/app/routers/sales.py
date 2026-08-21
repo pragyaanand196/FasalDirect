@@ -75,9 +75,21 @@ def create_sale_from_negotiation(
     if neg.status != "deal_agreed":
         raise HTTPException(status_code=400, detail="Cannot checkout a negotiation that is not agreed upon")
 
+    # Authorization: only the buyer who negotiated or admin can checkout
+    if current_user.role != "admin" and current_user.id != neg.buyer_id:
+        raise HTTPException(status_code=403, detail="Only the buyer associated with this deal can proceed to checkout")
+
+    # Idempotency check: if sale already exists for this negotiation, return existing sale
+    existing_sale = db.query(SaleTransaction).filter(SaleTransaction.negotiation_id == neg.id).first()
+    if existing_sale:
+        return _format_sale_response(existing_sale, db)
+
     team = db.query(Team).filter(Team.id == neg.team_id).first()
     members = db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
     total_kg = sum(m.contributed_kg for m in members)
+    if total_kg <= 0:
+        raise HTTPException(status_code=400, detail="Team has no contributed produce quantity")
+
     price_per_kg = neg.final_agreed_price_per_kg or neg.offered_price_per_kg
     gross_amount = round(total_kg * price_per_kg, 2)
     transport_deduction = neg.transport_cost_total or 0.0
@@ -114,6 +126,11 @@ def simulate_buyer_payment(
     sale = db.query(SaleTransaction).filter(SaleTransaction.id == sale_id).first()
     if not sale:
         raise HTTPException(status_code=404, detail="Sale transaction not found")
+
+    # Authorization: only the buyer or admin
+    if current_user.role != "admin" and current_user.id != sale.buyer_id:
+        raise HTTPException(status_code=403, detail="Only the buyer associated with this sale can simulate payment")
+
     if sale.payment_status == "completed":
         raise HTTPException(status_code=400, detail="Payment already processed and settled for this sale")
 
@@ -144,7 +161,7 @@ def get_collective_lot_passport(
     lot_code: str,
     db: Session = Depends(get_db)
 ):
-    passport = db.query(CollectiveLotPassport).filter(CollectiveLotPassport.lot_code == lot_code).first()
+    passport = db.query(CollectiveLotPassport).filter(CollectiveLotPassport.lot_code == lot_code.strip()).first()
     if not passport:
         raise HTTPException(status_code=404, detail="Lot Passport not found")
     
@@ -175,9 +192,13 @@ def get_my_sales(
     if current_user.role == "buyer":
         sales = db.query(SaleTransaction).filter(SaleTransaction.buyer_id == current_user.id).order_by(SaleTransaction.created_at.desc()).all()
     else:
-        # Farmer: find sales through team memberships
+        # Farmer: find sales through team memberships or represented teams
         memberships = db.query(TeamMember).filter(TeamMember.farmer_id == current_user.id).all()
-        team_ids = [m.team_id for m in memberships]
+        team_ids = list(set([m.team_id for m in memberships]))
+        represented = db.query(Team).filter(Team.representative_id == current_user.id).all()
+        for t in represented:
+            if t.id not in team_ids:
+                team_ids.append(t.id)
         sales = db.query(SaleTransaction).filter(SaleTransaction.team_id.in_(team_ids)).order_by(SaleTransaction.created_at.desc()).all()
 
     return [_format_sale_response(s, db) for s in sales]

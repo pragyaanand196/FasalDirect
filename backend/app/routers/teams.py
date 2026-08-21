@@ -16,7 +16,10 @@ from app.schemas import (
 )
 from app.auth import get_current_user, require_farmer
 from app.config import settings
-from app.engine.compatibility import compute_compatibility_score, calculate_haversine_distance
+from app.engine.compatibility import (
+    compute_compatibility_score, compute_buyer_team_compatibility_score,
+    calculate_haversine_distance
+)
 from app.engine.logistics import calculate_smart_collection_point, calculate_shared_transport_savings
 
 router = APIRouter(prefix="/teams", tags=["Collective Teams"])
@@ -27,6 +30,9 @@ def create_team(
     current_user: User = Depends(require_farmer),
     db: Session = Depends(get_db)
 ):
+    if not req.name or not req.name.strip():
+        raise HTTPException(status_code=400, detail="Team name is required")
+
     produce = db.query(ProduceLot).filter(
         ProduceLot.id == req.produce_lot_id,
         ProduceLot.farmer_id == current_user.id
@@ -78,7 +84,7 @@ def create_team(
         title="Team Created Successfully",
         message=f"You created team '{team.name}'. You are the Team Representative. Other compatible farmers can now request to join.",
         category="team_status",
-        link=f"/dashboard/team"
+        link=f"/dashboard/teams/{team.id}"
     )
     db.add(notif)
 
@@ -174,23 +180,142 @@ def find_compatible_teams(
 @router.get("/recently-created", response_model=List[TeamOpportunityResponse])
 def get_recently_created_compatible_teams(
     produce_lot_id: Optional[int] = None,
-    current_user: User = Depends(require_farmer),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    if produce_lot_id:
+    # If farmer called with specific produce
+    if produce_lot_id and current_user.role == "farmer":
         return find_compatible_teams(produce_lot_id, current_user, db)
     
-    # If no specific produce passed, check all open teams from DB
-    open_teams = db.query(Team).filter(Team.status == "open").order_by(Team.created_at.desc()).limit(10).all()
+    # If caller is a buyer: match against buyer's active requirements or location
+    if current_user.role == "buyer":
+        buyer_reqs = db.query(BuyerRequirement).filter(
+            BuyerRequirement.buyer_id == current_user.id,
+            BuyerRequirement.status == "active"
+        ).all()
+
+        active_teams = db.query(Team).filter(
+            Team.status.in_(["open", "full", "ready_to_sell"])
+        ).order_by(Team.created_at.desc()).all()
+
+        results = []
+        for t in active_teams:
+            members = db.query(TeamMember).filter(TeamMember.team_id == t.id).all()
+            if not members:
+                continue
+            rep = db.query(User).filter(User.id == t.representative_id).first()
+            combined_kg = sum(m.contributed_kg for m in members)
+            rep_loc = t.collection_address or (f"{rep.village or ''}, {rep.district or ''}".strip(", ") if rep else "Regional Depot")
+
+            # Check if matching requirement exists for this team's crop
+            matching_req = next((r for r in buyer_reqs if r.crop.lower() == t.crop.lower()), None)
+            if not matching_req and buyer_reqs:
+                # If buyer specified requirements for different crops, pick closest or first
+                matching_req = buyer_reqs[0]
+
+            if matching_req:
+                score, breakdown, reasons, summary = compute_buyer_team_compatibility_score(
+                    buyer_req=matching_req,
+                    buyer_user=current_user,
+                    team=t,
+                    representative_user=rep,
+                    team_members=members
+                )
+                dist_km = calculate_haversine_distance(
+                    matching_req.delivery_lat or current_user.latitude,
+                    matching_req.delivery_lng or current_user.longitude,
+                    t.collection_lat or (rep.latitude if rep else None),
+                    t.collection_lng or (rep.longitude if rep else None)
+                )
+                days_diff = abs((matching_req.target_delivery_date - t.target_selling_date).days)
+            else:
+                dist_km = calculate_haversine_distance(
+                    current_user.latitude, current_user.longitude,
+                    t.collection_lat or (rep.latitude if rep else None),
+                    t.collection_lng or (rep.longitude if rep else None)
+                )
+                days_diff = 0
+                score = 90.0 if t.status in ["full", "ready_to_sell"] else 80.0
+                breakdown = {
+                    "crop_match": 100.0,
+                    "variety_match": 90.0,
+                    "grade_match": 100.0,
+                    "date_window": 85.0,
+                    "proximity": 80.0,
+                    "quantity_fit": 85.0
+                }
+                summary = f"Verified collective lot aggregating {combined_kg:g} kg {t.crop} ({t.variety}) Grade {t.grade} from {len(members)} farmers."
+
+            results.append(
+                TeamOpportunityResponse(
+                    team_id=t.id,
+                    name=t.name,
+                    crop=t.crop,
+                    variety=t.variety,
+                    grade=t.grade,
+                    target_selling_date=t.target_selling_date,
+                    status=t.status,
+                    current_members_count=len(members),
+                    available_slots=max(0, 4 - len(members)),
+                    combined_quantity_kg=combined_kg,
+                    compatibility_percentage=score,
+                    distance_km=dist_km,
+                    selling_window_diff_days=days_diff,
+                    explanation=summary,
+                    score_breakdown=breakdown,
+                    representative_name=rep.full_name if rep else "Representative",
+                    representative_location=rep_loc,
+                    created_at=t.created_at
+                )
+            )
+
+        results.sort(key=lambda x: x.compatibility_percentage, reverse=True)
+        return results
+
+    # If caller is a Farmer without specific produce passed
+    open_teams = db.query(Team).filter(Team.status == "open").order_by(Team.created_at.desc()).limit(15).all()
     results = []
+    farmer_produce = db.query(ProduceLot).filter(
+        ProduceLot.farmer_id == current_user.id,
+        ProduceLot.status == "available"
+    ).first()
+
     for t in open_teams:
         members = db.query(TeamMember).filter(TeamMember.team_id == t.id).all()
         if len(members) >= 4:
             continue
+        if any(m.farmer_id == current_user.id for m in members):
+            continue
+
         rep = db.query(User).filter(User.id == t.representative_id).first()
         combined_kg = sum(m.contributed_kg for m in members)
-        rep_loc = f"{rep.village or ''}, {rep.district or ''}".strip(", ") if rep else "Regional"
-        
+        rep_loc = t.collection_address or (f"{rep.village or ''}, {rep.district or ''}".strip(", ") if rep else "Regional")
+
+        if farmer_produce and farmer_produce.crop.lower() == t.crop.lower():
+            score, breakdown, reasons, summary = compute_compatibility_score(
+                farmer_produce=farmer_produce,
+                farmer_user=current_user,
+                team=t,
+                representative_user=rep,
+                team_members=members
+            )
+            dist_km = calculate_haversine_distance(
+                current_user.latitude, current_user.longitude,
+                t.collection_lat or (rep.latitude if rep else None),
+                t.collection_lng or (rep.longitude if rep else None)
+            )
+            days_diff = abs((farmer_produce.expected_selling_date - t.target_selling_date).days)
+        else:
+            dist_km = calculate_haversine_distance(
+                current_user.latitude, current_user.longitude,
+                t.collection_lat or (rep.latitude if rep else None),
+                t.collection_lng or (rep.longitude if rep else None)
+            )
+            days_diff = 0
+            score = 80.0
+            breakdown = {"crop_match": 100.0, "variety_match": 80.0, "grade_match": 90.0, "date_window": 80.0, "proximity": 75.0, "quantity_fit": 75.0}
+            summary = f"Open collective lot aggregating {combined_kg:g} kg {t.crop} Grade {t.grade}. Seeking {4 - len(members)} more farmers."
+
         results.append(
             TeamOpportunityResponse(
                 team_id=t.id,
@@ -203,16 +328,18 @@ def get_recently_created_compatible_teams(
                 current_members_count=len(members),
                 available_slots=4 - len(members),
                 combined_quantity_kg=combined_kg,
-                compatibility_percentage=85.0,
-                distance_km=15.0,
-                selling_window_diff_days=2,
-                explanation=f"Recently formed team aggregating {t.crop} Grade {t.grade}. Looking for compatible local farmers to reach 4 members.",
-                score_breakdown={"crop_match": 100, "variety_match": 80, "grade_match": 100, "date_window": 90, "proximity": 85, "quantity_fit": 80},
+                compatibility_percentage=score,
+                distance_km=dist_km,
+                selling_window_diff_days=days_diff,
+                explanation=summary,
+                score_breakdown=breakdown,
                 representative_name=rep.full_name if rep else "Representative",
                 representative_location=rep_loc,
                 created_at=t.created_at
             )
         )
+
+    results.sort(key=lambda x: x.compatibility_percentage, reverse=True)
     return results
 
 @router.get("/my", response_model=List[TeamDetailResponse])
@@ -347,6 +474,9 @@ def create_join_request(
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
 
+    if team.status not in ["open", "ready_to_sell"]:
+        raise HTTPException(status_code=400, detail=f"Cannot join team: team is already full or unavailable (status '{team.status}')")
+
     members = db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
     # Enforce strict 4-member limit
     if len(members) >= 4:
@@ -400,7 +530,7 @@ def create_join_request(
         title=f"New Join Request ({score}% Match)",
         message=f"Farmer {current_user.full_name} requested to join '{team.name}' with {produce.quantity_kg:g} kg of {produce.crop}.",
         category="join_request",
-        link=f"/dashboard/team/requests"
+        link=f"/dashboard/teams/requests?team_id={team.id}"
     )
     db.add(notif)
 
@@ -527,7 +657,7 @@ def review_join_request(
 
         # Update member count and check if full
         all_members = db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
-        new_count = len(all_members) + 1  # including the new one
+        new_count = len(all_members) + 1  # including newly added
         if new_count >= 4:
             team.status = "full"
             # Reject any remaining pending join requests
@@ -556,7 +686,7 @@ def review_join_request(
             title="Join Request Approved!",
             message=f"Welcome! Your request to join team '{team.name}' has been approved by Representative {current_user.full_name}.",
             category="approval",
-            link=f"/dashboard/team"
+            link=f"/dashboard/teams/{team.id}"
         )
         db.add(notif)
 
@@ -588,7 +718,7 @@ def withdraw_from_team(
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
 
-    if team.status in ["selling", "sold", "completed"]:
+    if team.status in ["selling", "sold", "payment_processing", "completed"]:
         raise HTTPException(status_code=400, detail="Cannot withdraw once produce is committed to an agreed sale")
 
     member = db.query(TeamMember).filter(
@@ -608,7 +738,7 @@ def withdraw_from_team(
     remaining_members = db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
     
     if not remaining_members:
-        # If no members left, delete or close team
+        # If no members left, remove empty team
         db.delete(team)
         db.commit()
         return {"message": "You withdrew and the empty team was removed"}
@@ -617,13 +747,12 @@ def withdraw_from_team(
     if team.representative_id == current_user.id:
         new_rep_id = remaining_members[0].farmer_id
         team.representative_id = new_rep_id
-        new_rep = db.query(User).filter(User.id == new_rep_id).first()
         notif = Notification(
             user_id=new_rep_id,
             title="Assigned as Team Representative",
             message=f"The previous representative withdrew from '{team.name}'. You are now the Team Representative.",
             category="team_status",
-            link="/dashboard/team"
+            link=f"/dashboard/teams/{team.id}"
         )
         db.add(notif)
 
@@ -645,7 +774,7 @@ def simulate_what_if_benefit(
         raise HTTPException(status_code=404, detail="Produce lot not found")
 
     qty = produce.quantity_kg
-    # Solo benchmark: default to min price or local mandi price (e.g. ₹24/kg)
+    # Solo benchmark: default to min price or local mandi price
     solo_price = req.solo_price_per_kg or produce.min_price_per_kg or 24.0
     solo_dist = req.distance_km or 35.0
     # Solo transport: small tempo solo run ~₹800 base + ₹18/km

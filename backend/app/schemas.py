@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 from typing import Optional, List, Dict, Any
 from datetime import date, datetime
 
@@ -29,11 +29,11 @@ class FarmerRegister(BaseModel):
     # Optional first crop produce submission during registration
     crop: Optional[str] = None
     variety: Optional[str] = None
-    quantity_kg: Optional[float] = None
+    quantity_kg: Optional[float] = Field(None, gt=0)
     grade: Optional[str] = "A"
     harvest_date: Optional[date] = None
     expected_selling_date: Optional[date] = None
-    min_price_per_kg: Optional[float] = None
+    min_price_per_kg: Optional[float] = Field(None, gt=0)
     photo_url: Optional[str] = None
 
 class BuyerRegister(BaseModel):
@@ -53,12 +53,19 @@ class BuyerRegister(BaseModel):
     # Initial crop requirement during registration
     crop: Optional[str] = None
     variety: Optional[str] = None
-    min_quantity_kg: Optional[float] = None
-    max_quantity_kg: Optional[float] = None
+    min_quantity_kg: Optional[float] = Field(None, gt=0)
+    max_quantity_kg: Optional[float] = Field(None, gt=0)
     preferred_grade: Optional[str] = "Any"
     target_delivery_date: Optional[date] = None
-    offered_price_per_kg: Optional[float] = None
+    offered_price_per_kg: Optional[float] = Field(None, gt=0)
     buying_preferences: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_quantities(self):
+        if self.min_quantity_kg is not None and self.max_quantity_kg is not None:
+            if self.max_quantity_kg < self.min_quantity_kg:
+                raise ValueError("max_quantity_kg must be greater than or equal to min_quantity_kg")
+        return self
 
 class AdminRegister(BaseModel):
     phone: str
@@ -97,12 +104,19 @@ class UserResponse(BaseModel):
 class ProduceCreate(BaseModel):
     crop: str
     variety: str
-    quantity_kg: float
+    quantity_kg: float = Field(..., gt=0)
     grade: str
     harvest_date: date
     expected_selling_date: date
-    min_price_per_kg: float
+    min_price_per_kg: float = Field(..., gt=0)
     photo_url: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        if self.harvest_date and self.expected_selling_date:
+            if self.expected_selling_date < self.harvest_date:
+                raise ValueError("expected_selling_date must be on or after harvest_date")
+        return self
 
 class ProduceResponse(BaseModel):
     id: int
@@ -126,17 +140,23 @@ class ProduceResponse(BaseModel):
 class BuyerRequirementCreate(BaseModel):
     crop: str
     variety: Optional[str] = None
-    min_quantity_kg: float
-    max_quantity_kg: float
+    min_quantity_kg: float = Field(..., gt=0)
+    max_quantity_kg: float = Field(..., gt=0)
     preferred_grade: Optional[str] = "Any"
     target_delivery_date: date
-    offered_price_per_kg: float
+    offered_price_per_kg: float = Field(..., gt=0)
     delivery_state: str
     delivery_district: str
     delivery_address: str
     delivery_lat: Optional[float] = None
     delivery_lng: Optional[float] = None
     buying_preferences: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_quantities(self):
+        if self.max_quantity_kg < self.min_quantity_kg:
+            raise ValueError("max_quantity_kg must be greater than or equal to min_quantity_kg")
+        return self
 
 class BuyerRequirementResponse(BaseModel):
     id: int
@@ -301,12 +321,12 @@ class TeamGrowthSimulationResponse(BaseModel):
 # Negotiation Schemas
 class OfferCreate(BaseModel):
     team_id: int
-    offered_price_per_kg: float
+    offered_price_per_kg: float = Field(..., gt=0)
     buyer_requirement_id: Optional[int] = None
     notes: Optional[str] = None
 
 class CounterOfferCreate(BaseModel):
-    counter_price_per_kg: float
+    counter_price_per_kg: float = Field(..., gt=0)
     notes: Optional[str] = None
 
 class VoteRequest(BaseModel):
@@ -394,7 +414,7 @@ class WalletResponse(BaseModel):
     transactions: List[WalletTransactionResponse] = []
 
 class WithdrawRequest(BaseModel):
-    amount: float
+    amount: float = Field(..., gt=0)
     bank_account_or_upi: str
 
 # Digital Passport Schema

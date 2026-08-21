@@ -14,16 +14,23 @@ def create_produce_lot(
     current_user: User = Depends(require_farmer),
     db: Session = Depends(get_db)
 ):
+    if req.quantity_kg <= 0:
+        raise HTTPException(status_code=400, detail="Produce quantity must be greater than zero")
+    if req.min_price_per_kg <= 0:
+        raise HTTPException(status_code=400, detail="Minimum price per kg must be greater than zero")
+    if req.expected_selling_date < req.harvest_date:
+        raise HTTPException(status_code=400, detail="Expected selling date must be on or after harvest date")
+
     lot = ProduceLot(
         farmer_id=current_user.id,
         crop=req.crop.strip().title(),
-        variety=req.variety.strip().title(),
-        quantity_kg=req.quantity_kg,
-        available_quantity_kg=req.quantity_kg,
+        variety=req.variety.strip().title() if req.variety else "Standard",
+        quantity_kg=float(req.quantity_kg),
+        available_quantity_kg=float(req.quantity_kg),
         grade=req.grade.strip().upper(),
         harvest_date=req.harvest_date,
         expected_selling_date=req.expected_selling_date,
-        min_price_per_kg=req.min_price_per_kg,
+        min_price_per_kg=float(req.min_price_per_kg),
         photo_url=req.photo_url,
         status="available"
     )

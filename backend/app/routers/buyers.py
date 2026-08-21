@@ -16,21 +16,28 @@ def create_buyer_requirement(
     current_user: User = Depends(require_buyer),
     db: Session = Depends(get_db)
 ):
+    if req.min_quantity_kg <= 0:
+        raise HTTPException(status_code=400, detail="Minimum quantity must be greater than zero")
+    if req.max_quantity_kg < req.min_quantity_kg:
+        raise HTTPException(status_code=400, detail="Maximum quantity must be greater than or equal to minimum quantity")
+    if req.offered_price_per_kg <= 0:
+        raise HTTPException(status_code=400, detail="Offered price per kg must be greater than zero")
+
     requirement = BuyerRequirement(
         buyer_id=current_user.id,
         crop=req.crop.strip().title(),
         variety=req.variety.strip().title() if req.variety else None,
-        min_quantity_kg=req.min_quantity_kg,
-        max_quantity_kg=req.max_quantity_kg,
-        preferred_grade=req.preferred_grade or "Any",
+        min_quantity_kg=float(req.min_quantity_kg),
+        max_quantity_kg=float(req.max_quantity_kg),
+        preferred_grade=(req.preferred_grade or "Any").strip(),
         target_delivery_date=req.target_delivery_date,
-        offered_price_per_kg=req.offered_price_per_kg,
-        delivery_state=req.delivery_state,
-        delivery_district=req.delivery_district,
-        delivery_address=req.delivery_address,
+        offered_price_per_kg=float(req.offered_price_per_kg),
+        delivery_state=req.delivery_state.strip(),
+        delivery_district=req.delivery_district.strip(),
+        delivery_address=req.delivery_address.strip(),
         delivery_lat=req.delivery_lat,
         delivery_lng=req.delivery_lng,
-        buying_preferences=req.buying_preferences,
+        buying_preferences=req.buying_preferences.strip() if req.buying_preferences else None,
         status="active"
     )
     db.add(requirement)
@@ -131,6 +138,23 @@ def list_active_buyer_requirements(
             )
         )
     return results
+
+@router.delete("/requirements/{req_id}")
+def delete_buyer_requirement(
+    req_id: int,
+    current_user: User = Depends(require_buyer),
+    db: Session = Depends(get_db)
+):
+    requirement = db.query(BuyerRequirement).filter(
+        BuyerRequirement.id == req_id,
+        BuyerRequirement.buyer_id == current_user.id
+    ).first()
+    if not requirement:
+        raise HTTPException(status_code=404, detail="Buyer requirement not found")
+    
+    db.delete(requirement)
+    db.commit()
+    return {"message": "Buyer requirement deleted successfully"}
 
 @router.get("/{buyer_id}/reliability")
 def get_buyer_reliability(
