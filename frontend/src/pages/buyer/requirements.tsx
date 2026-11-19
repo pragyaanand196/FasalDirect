@@ -160,60 +160,118 @@ export default function BuyerRequirementsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {requirements.map((req) => (
-            <div
-              key={req.id}
-              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4 hover:border-slate-300 transition-all"
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="text-base font-black text-slate-900">{req.crop}</h3>
-                  <p className="text-xs font-semibold text-ochre-700">{req.variety || 'All Varieties'}</p>
-                </div>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
-                  {req.status}
-                </span>
-              </div>
+          {requirements.map((req) => {
+            const isCotton = (req.crop || "").toLowerCase().includes("cotton") || (req.variety || "").toLowerCase().includes("cotton");
+            const isTomato = (req.crop || "").toLowerCase().includes("tomato") || (req.variety || "").toLowerCase().includes("tomato");
+            const bgImage = isCotton ? "/images/cotton.jpg" : isTomato ? "/images/tomato.jpg" : null;
 
-              <div className="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs">
-                <div>
-                  <span className="text-slate-400 block text-[10px]">Volume Range</span>
-                  <span className="font-bold text-slate-800">{req.min_quantity_kg.toLocaleString()} - {req.max_quantity_kg.toLocaleString()} kg</span>
+            return (
+              <div
+                key={req.id}
+                className="relative bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden hover:border-slate-300 transition-all flex flex-col justify-between"
+              >
+                {/* Full Card Background Image */}
+                {bgImage && (
+                  <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+                    <img
+                      src={bgImage}
+                      alt={req.crop}
+                      className="w-full h-full object-cover object-center"
+                    />
+                  </div>
+                )}
+
+                {/* Upper Content Area */}
+                <div className="relative z-10 p-5 space-y-4">
+                  {/* Crop Title, Variety, and Status Badge */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3
+                        className={`text-base sm:text-lg font-black tracking-tight leading-tight ${
+                          bgImage ? "text-white" : "text-slate-900"
+                        }`}
+                        style={
+                          bgImage
+                            ? { textShadow: "0 1px 2px rgba(0, 0, 0, 0.95), 0 2px 6px rgba(0, 0, 0, 0.8), 0 0 1px rgba(0, 0, 0, 0.9)" }
+                            : undefined
+                        }
+                      >
+                        {req.crop}
+                      </h3>
+                      <p
+                        className={`text-xs font-bold leading-tight mt-0.5 ${
+                          bgImage ? "text-emerald-200" : "text-ochre-700"
+                        }`}
+                        style={
+                          bgImage
+                            ? { textShadow: "0 1px 2px rgba(0, 0, 0, 0.95), 0 2px 5px rgba(0, 0, 0, 0.75)" }
+                            : undefined
+                        }
+                      >
+                        {req.variety || 'All Varieties'}
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded shadow-2xs bg-emerald-100 text-emerald-800">
+                      {req.status}
+                    </span>
+                  </div>
+
+                  {/* Volume, Price, Grade, Date Details */}
+                  <div className={`grid grid-cols-2 gap-2 p-3 rounded-xl border text-xs ${
+                    bgImage
+                      ? "bg-white/85 backdrop-blur-xs border-white/60 shadow-xs"
+                      : "bg-slate-50 border-slate-100"
+                  }`}>
+                    <div>
+                      <span className={`${bgImage ? "text-slate-500 font-medium" : "text-slate-400"} block text-[10px]`}>Volume Range</span>
+                      <span className="font-bold text-slate-800">{req.min_quantity_kg.toLocaleString()} - {req.max_quantity_kg.toLocaleString()} kg</span>
+                    </div>
+                    <div>
+                      <span className={`${bgImage ? "text-slate-500 font-medium" : "text-slate-400"} block text-[10px]`}>Offered Price</span>
+                      <span className="font-bold text-agri-800">₹{req.offered_price_per_kg}/kg</span>
+                    </div>
+                    <div>
+                      <span className={`${bgImage ? "text-slate-500 font-medium" : "text-slate-400"} block text-[10px]`}>Quality Grade</span>
+                      <span className="font-bold text-slate-800">Grade {req.preferred_grade}</span>
+                    </div>
+                    <div>
+                      <span className={`${bgImage ? "text-slate-500 font-medium" : "text-slate-400"} block text-[10px]`}>Target Date</span>
+                      <span className="font-bold text-slate-800">{req.target_delivery_date}</span>
+                    </div>
+                  </div>
+
+                  {/* Preferences */}
+                  {req.buying_preferences && (
+                    <p className={`text-[11px] p-2 rounded-lg border ${
+                      bgImage
+                        ? "bg-white/85 backdrop-blur-xs border-white/60 text-slate-700 shadow-2xs"
+                        : "bg-slate-50 border-slate-100 text-slate-500"
+                    }`}>
+                      <strong className="text-slate-800">Preferences:</strong> {req.buying_preferences}
+                    </p>
+                  )}
                 </div>
-                <div>
-                  <span className="text-slate-400 block text-[10px]">Offered Price</span>
-                  <span className="font-bold text-agri-800">₹{req.offered_price_per_kg}/kg</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[10px]">Quality Grade</span>
-                  <span className="font-bold text-slate-800">Grade {req.preferred_grade}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[10px]">Target Date</span>
-                  <span className="font-bold text-slate-800">{req.target_delivery_date}</span>
+
+                {/* Delivery & Action Row */}
+                <div className={`relative z-10 px-5 py-3 border-t flex items-center justify-between text-xs ${
+                  bgImage
+                    ? "bg-white/85 backdrop-blur-xs border-white/60"
+                    : "bg-white border-slate-100"
+                }`}>
+                  <span className={bgImage ? "text-slate-700 font-medium" : "text-slate-500"}>
+                    Delivery to: <strong className="text-slate-800">{req.delivery_district}, {req.delivery_state}</strong>
+                  </span>
+                  <Link
+                    href={`/buyer/lots?crop=${req.crop}`}
+                    className="text-xs font-bold text-agri-700 hover:text-agri-900 hover:underline flex items-center gap-1"
+                  >
+                    <span>Matching Teams</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
                 </div>
               </div>
-
-              {req.buying_preferences && (
-                <p className="text-[11px] text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                  <strong>Preferences:</strong> {req.buying_preferences}
-                </p>
-              )}
-
-              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                <span className="text-slate-500">
-                  Delivery to: <strong className="text-slate-800">{req.delivery_district}, {req.delivery_state}</strong>
-                </span>
-                <Link
-                  href={`/buyer/lots?crop=${req.crop}`}
-                  className="text-xs font-bold text-agri-700 hover:underline flex items-center gap-1"
-                >
-                  <span>Matching Teams</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
