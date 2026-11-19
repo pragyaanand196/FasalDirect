@@ -26,10 +26,14 @@ export default function BuyerDashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== "buyer")) {
-      router.push("/login");
+    if (!authLoading) {
+      if (!user) {
+        router.push("/login");
+      } else if (user.role !== "buyer") {
+        router.push(user.role === "farmer" ? "/dashboard" : "/admin");
+      }
     }
-  }, [user, authLoading]);
+  }, [user, authLoading, router]);
 
   const loadBuyerData = async () => {
     try {

@@ -444,7 +444,7 @@ def get_team_detail_by_id(
         variety=team.variety,
         grade=team.grade,
         target_selling_date=team.target_selling_date,
-        status=team.status,
+        status="full" if (len(members) >= 4 and team.status == "open") else team.status,
         representative_id=team.representative_id,
         representative_name=rep.full_name if rep else "Representative",
         representative_phone=rep.phone if (is_member or current_user.role in ["buyer", "admin"]) else None,
@@ -571,10 +571,10 @@ def get_team_join_requests(
     if team.representative_id != current_user.id:
         raise HTTPException(status_code=403, detail="Only the Team Representative can review join requests")
 
-    requests = db.query(JoinRequest).filter(
-        JoinRequest.team_id == team_id,
-        JoinRequest.status == "pending"
-    ).all()
+    # Return all requests for this team, sorted with pending first, then by ID
+    status_order = {"pending": 0, "approved": 1, "rejected": 2}
+    requests = db.query(JoinRequest).filter(JoinRequest.team_id == team_id).all()
+    requests.sort(key=lambda r: (status_order.get(r.status, 3), r.id))
 
     results = []
     for r in requests:
@@ -622,27 +622,40 @@ def review_join_request(
 
     join_req = db.query(JoinRequest).filter(
         JoinRequest.id == req_id,
-        JoinRequest.team_id == team_id,
-        JoinRequest.status == "pending"
+        JoinRequest.team_id == team_id
     ).first()
     if not join_req:
-        raise HTTPException(status_code=404, detail="Join request not found or already processed")
+        raise HTTPException(status_code=404, detail="Join request not found")
 
-    if review.action.lower() == "approve":
-        members = db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
-        # Enforce strict 4-member limit
-        if len(members) >= 4:
-            join_req.status = "rejected"
-            db.commit()
-            raise HTTPException(status_code=400, detail="Team is already full (maximum 4 farmers). Cannot approve more members.")
+    action = review.action.lower()
+
+    if action == "approve":
+        # Check if already processed
+        if join_req.status == "approved":
+            raise HTTPException(status_code=400, detail="This join request has already been approved.")
+
+        # Check if farmer is already a member
+        existing_member = db.query(TeamMember).filter(
+            TeamMember.team_id == team.id,
+            TeamMember.farmer_id == join_req.farmer_id
+        ).first()
+        if existing_member:
+            raise HTTPException(status_code=400, detail="This farmer is already a member of this team.")
+
+        # Strict 4-farmer limit validation (representative + accepted farmers <= 4)
+        current_members = db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
+        if len(current_members) >= 4:
+            # Keep request as pending; DO NOT modify or reject it
+            raise HTTPException(
+                status_code=400,
+                detail="Your team is already full. A team can have a maximum of 4 farmers, including the team representative. You cannot accept any more requests."
+            )
 
         produce = db.query(ProduceLot).filter(ProduceLot.id == join_req.produce_lot_id).first()
         if not produce or produce.status != "available":
-            join_req.status = "rejected"
-            db.commit()
-            raise HTTPException(status_code=400, detail="The farmer's produce lot is no longer available")
+            raise HTTPException(status_code=400, detail="The farmer's produce lot is no longer available.")
 
-        # Add member
+        # Add member to team
         member = TeamMember(
             team_id=team.id,
             farmer_id=join_req.farmer_id,
@@ -655,19 +668,13 @@ def review_join_request(
         join_req.status = "approved"
         join_req.reviewed_at = datetime.utcnow()
 
-        # Update member count and check if full
+        # Update team status if capacity reached 4
         all_members = db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
-        new_count = len(all_members) + 1  # including newly added
+        new_count = len(all_members) + 1  # including newly added member
         if new_count >= 4:
             team.status = "full"
-            # Reject any remaining pending join requests
-            pending_others = db.query(JoinRequest).filter(
-                JoinRequest.team_id == team.id,
-                JoinRequest.status == "pending",
-                JoinRequest.id != join_req.id
-            ).all()
-            for po in pending_others:
-                po.status = "rejected"
+            # NOTE: DO NOT auto-reject remaining pending join requests.
+            # Remaining requests must stay visible as 'pending' for the representative.
 
         # Update Smart Collection Point centroid
         member_farmers = db.query(User).filter(
@@ -690,7 +697,12 @@ def review_join_request(
         )
         db.add(notif)
 
-    elif review.action.lower() == "reject":
+    elif action == "reject":
+        if join_req.status == "rejected":
+            raise HTTPException(status_code=400, detail="This join request has already been rejected.")
+        if join_req.status == "approved":
+            raise HTTPException(status_code=400, detail="Cannot reject a request that has already been approved. The member must withdraw instead.")
+
         join_req.status = "rejected"
         join_req.reviewed_at = datetime.utcnow()
 
@@ -699,14 +711,14 @@ def review_join_request(
             title="Join Request Update",
             message=f"Your request to join team '{team.name}' was not accepted at this time.",
             category="approval",
-            link=f"/dashboard/teams"
+            link="/dashboard/teams"
         )
         db.add(notif)
     else:
         raise HTTPException(status_code=400, detail="Invalid action. Use 'approve' or 'reject'.")
 
     db.commit()
-    return {"message": f"Join request {review.action}d successfully"}
+    return {"message": f"Join request {action}d successfully"}
 
 @router.post("/{team_id}/withdraw")
 def withdraw_from_team(

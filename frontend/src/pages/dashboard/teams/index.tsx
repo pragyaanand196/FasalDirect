@@ -252,7 +252,9 @@ export default function FindMyTeamPage() {
                   <div className="grid grid-cols-3 gap-2 my-3 text-xs bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
                     <div>
                       <span className="text-[10px] text-slate-400 block">Capacity</span>
-                      <span className="font-bold text-slate-800">{team.current_members_count}/4 Farmers</span>
+                      <span className={`font-bold ${team.current_members_count >= 4 ? "text-blue-900" : "text-slate-800"}`}>
+                        {team.current_members_count}/4 Farmers{team.current_members_count >= 4 ? " (Full)" : ""}
+                      </span>
                     </div>
                     <div>
                       <span className="text-[10px] text-slate-400 block">Combined kg</span>
@@ -281,11 +283,11 @@ export default function FindMyTeamPage() {
 
                   <button
                     onClick={() => setJoinModalTeam(team)}
-                    disabled={!selectedProduceId}
-                    className="px-4 py-2 bg-agri-700 hover:bg-agri-800 disabled:bg-slate-300 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5"
+                    disabled={!selectedProduceId || team.current_members_count >= 4}
+                    className="px-4 py-2 bg-agri-700 hover:bg-agri-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5"
                   >
                     <Send className="w-3.5 h-3.5" />
-                    <span>Request to Join</span>
+                    <span>{team.current_members_count >= 4 ? "Team Full" : "Request to Join"}</span>
                   </button>
                 </div>
               </div>

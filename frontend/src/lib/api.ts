@@ -4,7 +4,7 @@ export async function apiRequest<T = any>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("fasaldirect_token") : null;
+  const token = typeof window !== "undefined" ? sessionStorage.getItem("fasaldirect_token") : null;
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -21,6 +21,10 @@ export async function apiRequest<T = any>(
   });
 
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined") {
+      sessionStorage.removeItem("fasaldirect_token");
+      localStorage.removeItem("fasaldirect_token");
+    }
     let errorDetail = "An unexpected error occurred";
     try {
       const errJson = await response.json();

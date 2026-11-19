@@ -51,10 +51,14 @@ export default function AdminPortalPage() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== "admin")) {
-      router.push("/login");
+    if (!authLoading) {
+      if (!user) {
+        router.push("/login");
+      } else if (user.role !== "admin") {
+        router.push(user.role === "farmer" ? "/dashboard" : "/buyer");
+      }
     }
-  }, [user, authLoading]);
+  }, [user, authLoading, router]);
 
   const loadAdminData = async () => {
     try {

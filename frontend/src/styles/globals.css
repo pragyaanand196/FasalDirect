@@ -37,3 +37,30 @@ body {
   border-radius: 0.75rem;
   z-index: 10;
 }
+
+/* Continuous Marquee Animation for Landing Information Strip */
+@keyframes continuous-marquee {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.animate-marquee-continuous {
+  animation: continuous-marquee 38s linear infinite;
+  will-change: transform;
+}
+
+.animate-marquee-continuous:hover,
+.animate-marquee-continuous:focus-within {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee-continuous {
+    animation: none !important;
+    transform: none !important;
+  }
+}

@@ -28,10 +28,14 @@ export default function FarmerDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== "farmer")) {
-      router.push("/login");
+    if (!authLoading) {
+      if (!user) {
+        router.push("/login");
+      } else if (user.role !== "farmer") {
+        router.push(user.role === "buyer" ? "/buyer" : "/admin");
+      }
     }
-  }, [user, authLoading]);
+  }, [user, authLoading, router]);
 
   const loadDashboardData = async () => {
     try {
@@ -66,50 +70,50 @@ export default function FarmerDashboard() {
   const totalListedKg = produceLots.reduce((acc, p) => acc + (p.quantity_kg || 0), 0);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-7 lg:space-y-8">
       {/* Welcome Banner */}
-      <div className="bg-gradient-to-r from-agri-900 to-agri-800 text-white rounded-3xl p-6 sm:p-8 shadow-sm relative overflow-hidden">
-        <div className="relative z-10 space-y-3 max-w-2xl">
-          <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-agri-700 text-ochre-300 text-xs font-bold">
-            <Sparkles className="w-3 h-3" />
-            <span>Farmer Collective Hub • {user.district || "India"}, {user.state || ""}</span>
+      <div className="bg-gradient-to-r from-agri-950 via-agri-900 to-agri-800 text-white rounded-2xl sm:rounded-3xl p-6 sm:p-7 lg:p-8 shadow-sm relative overflow-hidden">
+        <div className="relative z-10 space-y-3.5 max-w-3xl">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-agri-800/80 border border-agri-700/60 text-ochre-300 text-xs font-semibold tracking-wide">
+            <Sparkles className="w-3.5 h-3.5 shrink-0" />
+            <span>Farmer Collective Hub • {user.district || "India"}{user.state ? `, ${user.state}` : ""}</span>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-black text-white">
+          <h1 className="text-2xl sm:text-[26px] lg:text-[28px] xl:text-[30px] font-bold tracking-tight text-white leading-tight">
             Namaste, {user.full_name}
           </h1>
 
-          <p className="text-xs sm:text-sm text-agri-100 font-normal leading-relaxed">
+          <p className="text-xs sm:text-[14px] lg:text-[14.5px] text-agri-100/90 font-normal leading-relaxed max-w-3xl">
             {activeTeam
               ? `You are currently in team '${activeTeam.name}' (${activeTeam.current_members_count}/4 farmers, ${activeTeam.combined_quantity_kg} kg ${activeTeam.crop}).`
               : "Aggregate your produce with neighboring farmers to unlock direct bulk buyer pricing and reduce individual transport costs."}
           </p>
 
-          <div className="flex flex-wrap items-center gap-3 pt-2">
+          <div className="pt-1 sm:pt-2 flex flex-wrap items-center gap-3">
             {!activeTeam ? (
               <>
                 <Link
                   href="/dashboard/teams"
-                  className="px-4 py-2.5 rounded-xl bg-ochre-500 hover:bg-ochre-400 text-slate-950 font-bold text-xs shadow-sm transition-all flex items-center gap-1.5"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-ochre-500 hover:bg-ochre-400 text-slate-950 font-bold text-xs sm:text-[13px] shadow-sm transition-all"
                 >
-                  <Users className="w-4 h-4" />
+                  <Users className="w-4 h-4 shrink-0" />
                   <span>Find My Team</span>
                 </Link>
                 <Link
                   href="/dashboard/teams/create"
-                  className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/20 font-bold text-xs transition-all flex items-center gap-1.5"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/20 font-bold text-xs sm:text-[13px] transition-all"
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus className="w-4 h-4 shrink-0" />
                   <span>Create 4-Farmer Team</span>
                 </Link>
               </>
             ) : (
               <Link
                 href={`/dashboard/teams/${activeTeam.id}`}
-                className="px-5 py-2.5 rounded-xl bg-ochre-500 hover:bg-ochre-400 text-slate-950 font-bold text-xs shadow-sm transition-all flex items-center gap-1.5"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-ochre-500 hover:bg-ochre-400 text-slate-950 font-bold text-xs sm:text-[13px] shadow-sm transition-all"
               >
                 <span>Open Team Hub ({activeTeam.name})</span>
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="w-4 h-4 shrink-0" />
               </Link>
             )}
           </div>
@@ -117,77 +121,85 @@ export default function FarmerDashboard() {
       </div>
 
       {/* KPI Overview Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold">Active Team</span>
-            <Users className="w-4 h-4 text-agri-600" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-4.5 lg:gap-5">
+        <div className="bg-white p-4.5 sm:p-5 rounded-2xl border border-slate-200/90 shadow-2xs flex flex-col justify-between min-h-[114px] sm:min-h-[120px] transition-all hover:border-slate-300">
+          <div className="flex items-center justify-between text-slate-500">
+            <span className="text-xs sm:text-[12.5px] font-semibold text-slate-600">Active Team</span>
+            <Users className="w-4 h-4 text-agri-600 shrink-0" />
           </div>
-          <p className="text-xl sm:text-2xl font-black text-slate-900">
-            {activeTeam ? `${activeTeam.current_members_count}/4 Members` : "No Team Yet"}
-          </p>
-          <p className="text-[11px] text-slate-400 mt-1 capitalize">
-            {activeTeam ? `Status: ${activeTeam.status.replace(/_/g, " ")}` : "Ready to join"}
-          </p>
+          <div className="my-auto py-1">
+            <p className="text-[22px] sm:text-[24px] lg:text-[25px] font-bold tracking-tight text-slate-900 leading-tight">
+              {activeTeam ? `${activeTeam.current_members_count}/4 Members` : "No Team Yet"}
+            </p>
+            <p className="text-[11px] sm:text-[11.5px] text-slate-400 mt-1 capitalize leading-tight">
+              {activeTeam ? (activeTeam.current_members_count >= 4 ? "Team Full (4/4)" : `Status: ${activeTeam.status.replace(/_/g, " ")}`) : "Ready to join"}
+            </p>
+          </div>
         </div>
 
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold">Total Produce Listed</span>
-            <Layers className="w-4 h-4 text-agri-600" />
+        <div className="bg-white p-4.5 sm:p-5 rounded-2xl border border-slate-200/90 shadow-2xs flex flex-col justify-between min-h-[114px] sm:min-h-[120px] transition-all hover:border-slate-300">
+          <div className="flex items-center justify-between text-slate-500">
+            <span className="text-xs sm:text-[12.5px] font-semibold text-slate-600">Total Produce Listed</span>
+            <Layers className="w-4 h-4 text-agri-600 shrink-0" />
           </div>
-          <p className="text-xl sm:text-2xl font-black text-slate-900">
-            {totalListedKg.toLocaleString()} kg
-          </p>
-          <p className="text-[11px] text-slate-400 mt-1">
-            {produceLots.length} Crop Lot{produceLots.length !== 1 ? "s" : ""} registered
-          </p>
+          <div className="my-auto py-1">
+            <p className="text-[22px] sm:text-[24px] lg:text-[25px] font-bold tracking-tight text-slate-900 leading-tight">
+              {totalListedKg.toLocaleString()} kg
+            </p>
+            <p className="text-[11px] sm:text-[11.5px] text-slate-400 mt-1 leading-tight">
+              {produceLots.length} Crop Lot{produceLots.length !== 1 ? "s" : ""} registered
+            </p>
+          </div>
         </div>
 
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold">Wallet Balance</span>
-            <Wallet className="w-4 h-4 text-emerald-600" />
+        <div className="bg-white p-4.5 sm:p-5 rounded-2xl border border-slate-200/90 shadow-2xs flex flex-col justify-between min-h-[114px] sm:min-h-[120px] transition-all hover:border-slate-300">
+          <div className="flex items-center justify-between text-slate-500">
+            <span className="text-xs sm:text-[12.5px] font-semibold text-slate-600">Wallet Balance</span>
+            <Wallet className="w-4 h-4 text-emerald-600 shrink-0" />
           </div>
-          <p className="text-xl sm:text-2xl font-black text-emerald-700">
-            ₹{(wallet?.available_balance || 0).toLocaleString()}
-          </p>
-          <Link href="/dashboard/wallet" className="text-[11px] text-agri-700 hover:underline font-semibold mt-1 block">
-            View Payouts →
-          </Link>
+          <div className="my-auto py-1">
+            <p className="text-[22px] sm:text-[24px] lg:text-[25px] font-bold tracking-tight text-emerald-700 leading-tight">
+              ₹{(wallet?.available_balance || 0).toLocaleString()}
+            </p>
+            <Link href="/dashboard/wallet" className="text-[11px] sm:text-[11.5px] text-agri-700 hover:text-agri-800 hover:underline font-semibold mt-1 inline-block leading-tight">
+              View Payouts →
+            </Link>
+          </div>
         </div>
 
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold">Total Earned</span>
-            <TrendingUp className="w-4 h-4 text-ochre-600" />
+        <div className="bg-white p-4.5 sm:p-5 rounded-2xl border border-slate-200/90 shadow-2xs flex flex-col justify-between min-h-[114px] sm:min-h-[120px] transition-all hover:border-slate-300">
+          <div className="flex items-center justify-between text-slate-500">
+            <span className="text-xs sm:text-[12.5px] font-semibold text-slate-600">Total Earned</span>
+            <TrendingUp className="w-4 h-4 text-ochre-600 shrink-0" />
           </div>
-          <p className="text-xl sm:text-2xl font-black text-slate-900">
-            ₹{(wallet?.total_earned || 0).toLocaleString()}
-          </p>
-          <p className="text-[11px] text-slate-400 mt-1">
-            From direct settlements
-          </p>
+          <div className="my-auto py-1">
+            <p className="text-[22px] sm:text-[24px] lg:text-[25px] font-bold tracking-tight text-slate-900 leading-tight">
+              ₹{(wallet?.total_earned || 0).toLocaleString()}
+            </p>
+            <p className="text-[11px] sm:text-[11.5px] text-slate-400 mt-1 leading-tight">
+              From direct settlements
+            </p>
+          </div>
         </div>
       </div>
 
       {/* Main Grid: My Active Team & Produce Lots */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2 Cols: My Active Team or Meaningful Empty State */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Users className="w-4 h-4 text-agri-700" />
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-7 items-start">
+        {/* Left 7-8 Cols: My Active Team or Meaningful Empty State */}
+        <div className="lg:col-span-7 xl:col-span-8 space-y-6">
+          <div className="bg-white p-5 sm:p-6 lg:p-7 rounded-2xl border border-slate-200/90 shadow-2xs space-y-5">
+            <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
+              <h2 className="text-[15px] sm:text-[16.5px] font-bold text-slate-900 flex items-center gap-2">
+                <Users className="w-4 h-4 text-agri-700 shrink-0" />
                 <span>My 4-Farmer Collective Team</span>
               </h2>
               {activeTeam && (
                 <Link
                   href={`/dashboard/teams/${activeTeam.id}`}
-                  className="text-xs font-bold text-agri-700 hover:underline flex items-center gap-1"
+                  className="text-xs sm:text-[12.5px] font-semibold text-agri-700 hover:text-agri-800 hover:underline inline-flex items-center gap-1 transition-colors"
                 >
                   <span>Open Full Team Hub</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
+                  <ChevronRight className="w-3.5 h-3.5 shrink-0" />
                 </Link>
               )}
             </div>
@@ -195,77 +207,78 @@ export default function FarmerDashboard() {
             {loading ? (
               <div className="py-12 text-center text-slate-400 text-xs">Loading team status...</div>
             ) : !activeTeam ? (
-              <div className="py-10 text-center space-y-3 bg-slate-50 rounded-xl border border-dashed border-slate-300 p-6">
+              <div className="py-10 text-center space-y-3.5 bg-slate-50/70 rounded-xl border border-dashed border-slate-300 p-6">
                 <div className="w-12 h-12 rounded-2xl bg-agri-100 text-agri-700 flex items-center justify-center mx-auto">
                   <Users className="w-6 h-6" />
                 </div>
                 <h3 className="text-sm font-bold text-slate-800">You have not joined a collective team yet</h3>
-                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                <p className="text-xs sm:text-[12.5px] text-slate-500 max-w-md mx-auto leading-relaxed">
                   Our Smart Opportunity Engine analyzes your produce lot to find open compatible teams in your district with matching crop, grade, and harvest timing.
                 </p>
-                <div className="flex justify-center gap-3 pt-2">
+                <div className="flex flex-wrap justify-center gap-3 pt-1">
                   <Link
                     href="/dashboard/teams"
-                    className="px-4 py-2 bg-agri-700 hover:bg-agri-800 text-white text-xs font-bold rounded-xl shadow-xs"
+                    className="px-4 py-2 bg-agri-700 hover:bg-agri-800 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
                   >
                     Find Compatible Teams
                   </Link>
                   <Link
                     href="/dashboard/teams/create"
-                    className="px-4 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-bold rounded-xl"
+                    className="px-4 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-bold rounded-xl transition-colors"
                   >
                     Create New Team
                   </Link>
                 </div>
               </div>
             ) : (
-              <div className="space-y-4">
-                <div className="p-4 bg-agri-50/70 border border-agri-200 rounded-xl flex items-center justify-between">
+              <div className="space-y-5">
+                <div className="p-4 sm:p-4.5 bg-agri-50/70 border border-agri-200/90 rounded-xl flex items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-sm font-bold text-agri-950">{activeTeam.name}</h3>
-                    <p className="text-xs text-slate-600 mt-0.5">
+                    <h3 className="text-sm sm:text-[14.5px] lg:text-[15px] font-bold text-agri-950">{activeTeam.name}</h3>
+                    <p className="text-xs sm:text-[12.5px] text-slate-600 mt-0.5 leading-normal">
                       Aggregating {activeTeam.crop} ({activeTeam.variety}) Grade {activeTeam.grade} • Target Date: {activeTeam.target_selling_date}
                     </p>
                   </div>
-                  <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-agri-200 text-agri-900">
+                  <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-agri-100 text-agri-800 border border-agri-200/80 shrink-0">
                     {activeTeam.status.replace(/_/g, " ")}
                   </span>
                 </div>
 
                 {/* 4 Member Slots Progress */}
-                <div>
-                  <div className="flex items-center justify-between text-xs font-semibold text-slate-600 mb-2">
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between text-xs sm:text-[12.5px] font-semibold text-slate-600">
                     <span>Member Capacity ({activeTeam.current_members_count}/4 Farmers)</span>
                     <span className="font-bold text-agri-800">{activeTeam.combined_quantity_kg.toLocaleString()} kg Total</span>
                   </div>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
                     {[0, 1, 2, 3].map((slotIdx) => {
                       const member = activeTeam.members[slotIdx];
                       return (
                         <div
                           key={slotIdx}
-                          className={`p-3 rounded-xl border text-center transition-all ${
+                          className={`p-3 rounded-xl border flex flex-col items-center justify-center text-center min-h-[96px] sm:min-h-[104px] transition-all ${
                             member
-                              ? "bg-white border-agri-400 shadow-2xs"
-                              : "bg-slate-50 border-dashed border-slate-300 text-slate-400"
+                              ? "bg-agri-50/50 border-agri-400/80 shadow-2xs"
+                              : "bg-slate-50/70 border-dashed border-slate-300 text-slate-400"
                           }`}
                         >
                           {member ? (
                             <>
-                              <span className="text-[10px] font-bold text-agri-700 block truncate">
+                              <span className="text-xs sm:text-[12px] font-bold text-agri-900 block truncate max-w-full px-1">
                                 {member.farmer_name}
                               </span>
-                              <span className="text-xs font-black text-slate-900 block mt-0.5">
+                              <span className="text-xs sm:text-[13px] font-black text-slate-900 block mt-0.5">
                                 {member.contributed_kg} kg
                               </span>
-                              <span className="text-[9px] text-slate-400 block mt-0.5">
+                              <span className="text-[10px] font-semibold text-agri-700 uppercase tracking-wide block mt-0.5">
                                 {member.is_representative ? "Representative" : "Member"}
                               </span>
                             </>
                           ) : (
                             <>
-                              <span className="text-[10px] font-semibold text-slate-400 block">Slot {slotIdx + 1}</span>
-                              <span className="text-xs font-bold text-slate-400 block mt-0.5">Open</span>
+                              <span className="text-[11px] font-medium text-slate-500 block">Slot {slotIdx + 1}</span>
+                              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block mt-0.5">Open</span>
+                              <span className="text-[10px] text-slate-400/80 block mt-0.5">Available</span>
                             </>
                           )}
                         </div>
@@ -274,13 +287,13 @@ export default function FarmerDashboard() {
                   </div>
                 </div>
 
-                <div className="pt-2 flex justify-end">
+                <div className="pt-1 flex justify-end">
                   <Link
                     href={`/dashboard/teams/${activeTeam.id}`}
-                    className="text-xs font-bold text-agri-800 hover:text-agri-900 flex items-center gap-1"
+                    className="text-xs sm:text-[12.5px] font-bold text-agri-800 hover:text-agri-900 inline-flex items-center gap-1.5 transition-colors"
                   >
                     <span>Manage Collective Team & Negotiations</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
+                    <ArrowRight className="w-3.5 h-3.5 shrink-0" />
                   </Link>
                 </div>
               </div>
@@ -288,31 +301,31 @@ export default function FarmerDashboard() {
           </div>
         </div>
 
-        {/* Right Col: Quick Produce Lots Overview */}
-        <div className="space-y-6">
-          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Layers className="w-4 h-4 text-agri-700" />
+        {/* Right 5-4 Cols: Quick Produce Lots Overview */}
+        <div className="lg:col-span-5 xl:col-span-4 space-y-6">
+          <div className="bg-white p-5 sm:p-6 lg:p-7 rounded-2xl border border-slate-200/90 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
+              <h2 className="text-[15px] sm:text-[16.5px] font-bold text-slate-900 flex items-center gap-2">
+                <Layers className="w-4 h-4 text-agri-700 shrink-0" />
                 <span>My Produce</span>
               </h2>
               <Link
                 href="/dashboard/produce"
-                className="text-xs font-bold text-agri-700 hover:underline flex items-center gap-1"
+                className="text-xs sm:text-[12.5px] font-semibold text-agri-700 hover:text-agri-800 hover:underline inline-flex items-center gap-1 transition-colors"
               >
                 <span>Manage</span>
-                <ChevronRight className="w-3.5 h-3.5" />
+                <ChevronRight className="w-3.5 h-3.5 shrink-0" />
               </Link>
             </div>
 
             {produceLots.length === 0 ? (
-              <div className="py-8 text-center space-y-2 bg-slate-50 rounded-xl p-4">
+              <div className="py-8 text-center space-y-2.5 bg-slate-50/70 rounded-xl p-4">
                 <p className="text-xs text-slate-500">No produce lots listed yet.</p>
                 <Link
                   href="/dashboard/produce"
-                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-agri-700 text-white rounded-lg text-xs font-bold"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-agri-700 hover:bg-agri-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
                 >
-                  <Plus className="w-3.5 h-3.5" /> Add Produce
+                  <Plus className="w-3.5 h-3.5 shrink-0" /> Add Produce
                 </Link>
               </div>
             ) : (
@@ -320,20 +333,22 @@ export default function FarmerDashboard() {
                 {produceLots.slice(0, 3).map((p) => (
                   <div
                     key={p.id}
-                    className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-xs flex items-center justify-between"
+                    className="p-3.5 sm:p-4 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/90 text-xs flex items-center justify-between gap-3 transition-colors"
                   >
-                    <div>
-                      <p className="font-bold text-slate-900">{p.crop} ({p.variety})</p>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-900 text-xs sm:text-[13.5px] leading-snug truncate">
+                        {p.crop} ({p.variety})
+                      </p>
+                      <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 leading-normal">
                         Grade {p.grade} • {p.quantity_kg} kg • Min ₹{p.min_price_per_kg}/kg
                       </p>
                     </div>
-                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                    <span className={`text-[10px] sm:text-[10.5px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md shrink-0 whitespace-nowrap shadow-2xs ${
                       p.status === "available"
-                        ? "bg-emerald-100 text-emerald-800"
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200/90"
                         : p.status === "locked_in_team"
-                        ? "bg-blue-100 text-blue-800"
-                        : "bg-slate-200 text-slate-700"
+                        ? "bg-blue-50 text-blue-700 border border-blue-200/90"
+                        : "bg-slate-100 text-slate-700 border border-slate-200/90"
                     }`}>
                       {p.status.replace(/_/g, " ")}
                     </span>

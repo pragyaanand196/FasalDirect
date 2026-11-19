@@ -77,9 +77,13 @@ export default function ProducePage() {
     setIsSubmitting(true);
 
     try {
+      const isCotton = form.crop.toLowerCase().includes("cotton") || form.variety.toLowerCase().includes("cotton");
+      const isTomato = form.crop.toLowerCase().includes("tomato") || form.variety.toLowerCase().includes("tomato");
+      const photoUrl = isCotton ? "/images/cotton.jpg" : isTomato ? "/images/tomato.jpg" : undefined;
+
       if (!navigator.onLine) {
         // Save as offline draft
-        await saveOfflineDraft(form);
+        await saveOfflineDraft({ ...form, photo_url: photoUrl });
         setSuccessMsg("Saved locally as an Offline Draft. It will sync when connection returns.");
         setShowAddModal(false);
         const drafts = await getOfflineDrafts();
@@ -93,6 +97,7 @@ export default function ProducePage() {
           harvest_date: form.harvest_date,
           expected_selling_date: form.expected_selling_date,
           min_price_per_kg: Number(form.min_price_per_kg),
+          photo_url: photoUrl,
         });
         setSuccessMsg("Produce lot added successfully!");
         setShowAddModal(false);
@@ -107,6 +112,9 @@ export default function ProducePage() {
 
   const handleSyncDraft = async (draft: any) => {
     try {
+      const isCotton = draft.crop?.toLowerCase().includes("cotton") || draft.variety?.toLowerCase().includes("cotton");
+      const isTomato = draft.crop?.toLowerCase().includes("tomato") || draft.variety?.toLowerCase().includes("tomato");
+      const photoUrl = draft.photo_url || (isCotton ? "/images/cotton.jpg" : isTomato ? "/images/tomato.jpg" : undefined);
       await api.createProduce({
         crop: draft.crop,
         variety: draft.variety,
@@ -115,6 +123,7 @@ export default function ProducePage() {
         harvest_date: draft.harvest_date,
         expected_selling_date: draft.expected_selling_date,
         min_price_per_kg: Number(draft.min_price_per_kg),
+        photo_url: photoUrl,
       });
       await deleteOfflineDraft(draft.id);
       setSuccessMsg(`Draft ${draft.crop} synced to server!`);
@@ -225,74 +234,125 @@ export default function ProducePage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {produceList.map((p) => (
-            <div
-              key={p.id}
-              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4 hover:border-slate-300 transition-all"
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="text-base font-black text-slate-900">{p.crop}</h3>
-                  <p className="text-xs font-semibold text-agri-700">{p.variety}</p>
+          {produceList.map((p) => {
+            const isCotton = (p.crop || "").toLowerCase().includes("cotton") || (p.variety || "").toLowerCase().includes("cotton");
+            const isTomato = (p.crop || "").toLowerCase().includes("tomato") || (p.variety || "").toLowerCase().includes("tomato");
+            const bgImage = p.photo_url || (isCotton ? "/images/cotton.jpg" : isTomato ? "/images/tomato.jpg" : null);
+
+            return (
+              <div
+                key={p.id}
+                className="relative bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden hover:border-slate-300 transition-all flex flex-col justify-between"
+              >
+                {/* Full Card Background Image occupying the whole square */}
+                {bgImage && (
+                  <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+                    <img
+                      src={bgImage}
+                      alt={p.crop}
+                      className="w-full h-full object-cover object-center"
+                    />
+                  </div>
+                )}
+
+                {/* Upper Card Content */}
+                <div className="relative z-10 p-5 space-y-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3
+                        className={`text-base sm:text-lg font-black tracking-tight leading-tight ${
+                          bgImage ? "text-white" : "text-slate-900"
+                        }`}
+                        style={
+                          bgImage
+                            ? { textShadow: "0 1px 2px rgba(0, 0, 0, 0.95), 0 2px 6px rgba(0, 0, 0, 0.8), 0 0 1px rgba(0, 0, 0, 0.9)" }
+                            : undefined
+                        }
+                      >
+                        {p.crop}
+                      </h3>
+                      <p
+                        className={`text-xs font-bold leading-tight mt-0.5 ${
+                          bgImage ? "text-emerald-200" : "text-agri-700"
+                        }`}
+                        style={
+                          bgImage
+                            ? { textShadow: "0 1px 2px rgba(0, 0, 0, 0.95), 0 2px 5px rgba(0, 0, 0, 0.75)" }
+                            : undefined
+                        }
+                      >
+                        {p.variety}
+                      </p>
+                    </div>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded shadow-2xs ${
+                      p.status === "available"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : p.status === "locked_in_team"
+                        ? "bg-blue-100 text-blue-800"
+                        : "bg-slate-200 text-slate-700"
+                    }`}>
+                      {p.status.replace(/_/g, " ")}
+                    </span>
+                  </div>
+
+                  <div className={`grid grid-cols-2 gap-2 text-xs p-3 rounded-xl border ${
+                    bgImage
+                      ? "bg-white/85 backdrop-blur-xs border-white/60 shadow-xs"
+                      : "bg-slate-50 border-slate-100"
+                  }`}>
+                    <div>
+                      <span className={`${bgImage ? "text-slate-500 font-medium" : "text-slate-400"} block text-[11px]`}>Quantity</span>
+                      <span className="font-bold text-slate-800">{p.quantity_kg.toLocaleString()} kg</span>
+                    </div>
+                    <div>
+                      <span className={`${bgImage ? "text-slate-500 font-medium" : "text-slate-400"} block text-[11px]`}>Quality Grade</span>
+                      <span className="font-bold text-slate-800">Grade {p.grade}</span>
+                    </div>
+                    <div>
+                      <span className={`${bgImage ? "text-slate-500 font-medium" : "text-slate-400"} block text-[11px]`}>Min Rate</span>
+                      <span className="font-bold text-slate-800">₹{p.min_price_per_kg}/kg</span>
+                    </div>
+                    <div>
+                      <span className={`${bgImage ? "text-slate-500 font-medium" : "text-slate-400"} block text-[11px]`}>Expected Sell</span>
+                      <span className="font-bold text-slate-800">{p.expected_selling_date}</span>
+                    </div>
+                  </div>
                 </div>
-                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
-                  p.status === "available"
-                    ? "bg-emerald-100 text-emerald-800"
-                    : p.status === "locked_in_team"
-                    ? "bg-blue-100 text-blue-800"
-                    : "bg-slate-200 text-slate-700"
+
+                {/* Footer Action Row extending over background image */}
+                <div className={`relative z-10 px-5 py-3 border-t flex items-center justify-between ${
+                  bgImage
+                    ? "bg-white/85 backdrop-blur-xs border-white/60"
+                    : "bg-white border-slate-100"
                 }`}>
-                  {p.status.replace(/_/g, " ")}
-                </span>
-              </div>
+                  {p.status === "available" ? (
+                    <Link
+                      href={`/dashboard/teams?produce_id=${p.id}`}
+                      className="text-xs font-bold text-agri-700 hover:text-agri-900 flex items-center gap-1"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Find Compatible Teams</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
+                  ) : (
+                    <span className="text-xs font-medium text-slate-500">
+                      {p.status === "locked_in_team" ? "Committed to active team" : "Lot Sold & Settled"}
+                    </span>
+                  )}
 
-              <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-3 rounded-xl border border-slate-100">
-                <div>
-                  <span className="text-slate-400 block text-[11px]">Quantity</span>
-                  <span className="font-bold text-slate-800">{p.quantity_kg.toLocaleString()} kg</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[11px]">Quality Grade</span>
-                  <span className="font-bold text-slate-800">Grade {p.grade}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[11px]">Min Rate</span>
-                  <span className="font-bold text-slate-800">₹{p.min_price_per_kg}/kg</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[11px]">Expected Sell</span>
-                  <span className="font-bold text-slate-800">{p.expected_selling_date}</span>
+                  {p.status === "available" && (
+                    <button
+                      onClick={() => handleDelete(p.id)}
+                      className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                      title="Delete produce lot"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
-
-              <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                {p.status === "available" ? (
-                  <Link
-                    href={`/dashboard/teams?produce_id=${p.id}`}
-                    className="text-xs font-bold text-agri-700 hover:text-agri-900 flex items-center gap-1"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Find Compatible Teams</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </Link>
-                ) : (
-                  <span className="text-xs font-medium text-slate-500">
-                    {p.status === "locked_in_team" ? "Committed to active team" : "Lot Sold & Settled"}
-                  </span>
-                )}
-
-                {p.status === "available" && (
-                  <button
-                    onClick={() => handleDelete(p.id)}
-                    className="p-1 text-slate-400 hover:text-rose-600 rounded"
-                    title="Delete produce lot"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

@@ -4,6 +4,7 @@ import { useRouter } from "next/router";
 import { useAuth } from "@/lib/authContext";
 import { api } from "@/lib/api";
 import { LeafletMap } from "@/components/LeafletMap";
+import { AuthVideoBackground } from "@/components/AuthVideoBackground";
 import {
   Sprout,
   Building2,
@@ -17,7 +18,9 @@ import {
   CheckCircle2,
   ArrowRight,
   Globe,
-  Upload
+  Upload,
+  Eye,
+  EyeOff
 } from "lucide-react";
 
 const INDIAN_STATES = [
@@ -42,6 +45,7 @@ export default function RegisterPage() {
   const [role, setRole] = useState<"farmer" | "buyer" | "admin">("farmer");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Sync role from query string if provided
   useEffect(() => {
@@ -197,16 +201,21 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto py-6 sm:py-10">
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-10 space-y-6">
-        <div className="text-center space-y-2">
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
-            Join the FasalDirect Network
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 max-w-lg mx-auto">
-            Choose your role below. No mock data: your profile and produce listings will directly participate in live aggregation and negotiations.
-          </p>
-        </div>
+    <>
+      {/* Full-screen agricultural video background */}
+      <AuthVideoBackground />
+
+      {/* Centered original registration card */}
+      <div className="relative z-10 w-full max-w-4xl mx-auto py-6 sm:py-10 px-2 sm:px-0">
+        <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-white/60 shadow-2xl p-6 sm:p-10 space-y-6">
+          <div className="text-center space-y-2">
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
+              Join the FasalDirect Network
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-500 max-w-lg mx-auto">
+              Choose your role below. No mock data: your profile and produce listings will directly participate in live aggregation and negotiations.
+            </p>
+          </div>
 
         {/* Role Selector Tabs */}
         <div className="grid grid-cols-3 gap-2 p-1.5 bg-slate-100 rounded-2xl">
@@ -292,14 +301,24 @@ export default function RegisterPage() {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Password *</label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="Create secure password"
-                    value={farmerForm.password}
-                    onChange={(e) => setFarmerForm({ ...farmerForm, password: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-agri-500"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      required
+                      placeholder="Create secure password"
+                      value={farmerForm.password}
+                      onChange={(e) => setFarmerForm({ ...farmerForm, password: e.target.value })}
+                      className="w-full px-3.5 py-2.5 pr-10 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-agri-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                      tabIndex={-1}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div>
@@ -570,14 +589,24 @@ export default function RegisterPage() {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Password *</label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="Create secure password"
-                    value={buyerForm.password}
-                    onChange={(e) => setBuyerForm({ ...buyerForm, password: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-agri-500"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      required
+                      placeholder="Create secure password"
+                      value={buyerForm.password}
+                      onChange={(e) => setBuyerForm({ ...buyerForm, password: e.target.value })}
+                      className="w-full px-3.5 py-2.5 pr-10 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-agri-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                      tabIndex={-1}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div>
@@ -736,14 +765,24 @@ export default function RegisterPage() {
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">Password *</label>
-              <input
-                type="password"
-                required
-                placeholder="Admin password"
-                value={adminForm.password}
-                onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-slate-700"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  required
+                  placeholder="Admin password"
+                  value={adminForm.password}
+                  onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })}
+                  className="w-full px-3.5 py-2.5 pr-10 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-slate-700"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
             <button
@@ -765,5 +804,6 @@ export default function RegisterPage() {
         </div>
       </div>
     </div>
+    </>
   );
 }

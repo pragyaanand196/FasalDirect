@@ -31,7 +31,7 @@ def create_produce_lot(
         harvest_date=req.harvest_date,
         expected_selling_date=req.expected_selling_date,
         min_price_per_kg=float(req.min_price_per_kg),
-        photo_url=req.photo_url,
+        photo_url=req.photo_url or ("/images/cotton.jpg" if "cotton" in req.crop.lower() else None),
         status="available"
     )
     db.add(lot)

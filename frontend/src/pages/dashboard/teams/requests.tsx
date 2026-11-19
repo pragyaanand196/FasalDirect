@@ -14,7 +14,9 @@ import {
   Calendar,
   Layers,
   MapPin,
-  ShieldCheck
+  ShieldCheck,
+  Lock,
+  ArrowRight
 } from "lucide-react";
 
 export default function JoinRequestsReviewPage() {
@@ -52,12 +54,21 @@ export default function JoinRequestsReviewPage() {
     }
   }, [team_id]);
 
+  const isTeamFull = team ? team.current_members_count >= 4 : false;
+
   const handleReview = async (reqId: number, action: "approve" | "reject") => {
     if (!team_id) return;
+
+    if (action === "approve" && isTeamFull) {
+      setError("Your team is already full. A team can have a maximum of 4 farmers, including the team representative. You cannot accept any more requests.");
+      return;
+    }
+
     try {
       setError(null);
+      setSuccessMsg(null);
       await api.reviewJoinRequest(Number(team_id), reqId, action);
-      setSuccessMsg(`Join request has been ${action}d!`);
+      setSuccessMsg(action === "approve" ? "Farmer successfully accepted into team!" : "Join request rejected.");
       await loadRequests();
     } catch (err: any) {
       setError(err.message || "Failed to process join request");
@@ -75,17 +86,48 @@ export default function JoinRequestsReviewPage() {
         ]}
       />
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2">
             <Users className="w-6 h-6 text-agri-700" />
             <span>Review Join Requests</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            {team ? `Team '${team.name}' (${team.current_members_count}/4 Members Confirmed)` : "Pending farmer applications"}
+            {team ? `Team '${team.name}'` : "Farmer applications"}
           </p>
         </div>
+
+        {team && (
+          <div className="flex items-center gap-2">
+            <span className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 ${
+              isTeamFull
+                ? "bg-blue-50 text-blue-900 border-blue-200"
+                : "bg-agri-50 text-agri-900 border-agri-200"
+            }`}>
+              <Users className="w-3.5 h-3.5" />
+              <span>{team.current_members_count}/4 Members</span>
+              {isTeamFull && <span className="bg-blue-600 text-white text-[10px] px-1.5 py-0.2 rounded font-black">Team Full</span>}
+            </span>
+
+            <span className="text-xs text-slate-500 font-medium">
+              {team.available_slots === 0 ? "0 slots available" : `${team.available_slots} slot${team.available_slots > 1 ? 's' : ''} available`}
+            </span>
+          </div>
+        )}
       </div>
+
+      {/* Team Full Persistent Banner */}
+      {isTeamFull && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-900 space-y-1">
+          <div className="flex items-center gap-2 font-bold text-amber-950">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>Your Team is Full (4/4 Members)</span>
+          </div>
+          <p className="text-amber-800 leading-relaxed">
+            Your team has reached the maximum capacity of 4 farmers, including the team representative. All pending requests remain visible below for your records, but you cannot accept any more requests unless an existing member withdraws.
+          </p>
+        </div>
+      )}
 
       {error && (
         <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-start gap-2">
@@ -106,7 +148,7 @@ export default function JoinRequestsReviewPage() {
       ) : requests.length === 0 ? (
         <div className="py-16 text-center space-y-3 bg-white rounded-2xl border border-slate-200 p-8">
           <Users className="w-12 h-12 text-slate-300 mx-auto" />
-          <h3 className="text-sm font-bold text-slate-800">No pending join requests</h3>
+          <h3 className="text-sm font-bold text-slate-800">No join requests found</h3>
           <p className="text-xs text-slate-500 max-w-sm mx-auto">
             When compatible farmers in your district discover your team and apply, their applications will appear here.
           </p>
@@ -121,86 +163,153 @@ export default function JoinRequestsReviewPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {requests.map((req) => (
-            <div
-              key={req.id}
-              className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-base font-black text-slate-900">{req.farmer_name}</h3>
-                  <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                    <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                    {req.farmer_village || "Local Village"}, {req.farmer_district || "District"}
-                  </p>
+          {requests.map((req) => {
+            const isApproved = req.status === "approved";
+            const isRejected = req.status === "rejected";
+            const isPending = req.status === "pending";
+
+            return (
+              <div
+                key={req.id}
+                className={`bg-white p-5 sm:p-6 rounded-2xl border shadow-2xs space-y-4 transition-all ${
+                  isApproved
+                    ? "border-emerald-200 bg-emerald-50/20"
+                    : isRejected
+                    ? "border-slate-200 opacity-70"
+                    : "border-slate-200"
+                }`}
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-black text-slate-900">{req.farmer_name}</h3>
+                      {isApproved && (
+                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          Accepted (Member)
+                        </span>
+                      )}
+                      {isRejected && (
+                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200 flex items-center gap-1">
+                          <X className="w-3 h-3 text-slate-400" />
+                          Not Accepted
+                        </span>
+                      )}
+                      {isPending && (
+                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                          Pending Review
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                      <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                      {req.farmer_village || "Local Village"}, {req.farmer_district || "District"}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs font-semibold text-slate-500">Compatibility:</span>
+                    <span className="text-base font-black text-agri-800 bg-agri-100 px-2.5 py-0.5 rounded-lg">
+                      {req.compatibility_score}% Match
+                    </span>
+                  </div>
                 </div>
 
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs font-semibold text-slate-500">Compatibility:</span>
-                  <span className="text-base font-black text-agri-800 bg-agri-100 px-2.5 py-0.5 rounded-lg">
-                    {req.compatibility_score}% Match
-                  </span>
+                {/* Applicant Produce Summary */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">Crop & Variety</span>
+                    <span className="font-bold text-slate-800">{req.crop} ({req.variety})</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">Quality Grade</span>
+                    <span className="font-bold text-slate-800">Grade {req.grade}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">Contributed kg</span>
+                    <span className="font-bold text-agri-950">{req.contributed_kg} kg</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">Harvest Date</span>
+                    <span className="font-bold text-slate-800">{req.harvest_date}</span>
+                  </div>
                 </div>
+
+                {/* Match Reasons */}
+                {req.match_reasons && req.match_reasons.length > 0 && (
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-bold text-slate-600 block">Identified Synergy:</span>
+                    <ul className="text-xs text-slate-600 space-y-1">
+                      {req.match_reasons.map((r: string, idx: number) => (
+                        <li key={idx} className="flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-agri-600 shrink-0" />
+                          <span>{r}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {req.message && (
+                  <div className="p-3 bg-agri-50/50 rounded-xl border border-agri-100 text-xs text-slate-700 italic">
+                    "{req.message}"
+                  </div>
+                )}
+
+                {/* Actions */}
+                {isPending && (
+                  <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-xs text-slate-500">
+                      {isTeamFull ? (
+                        <span className="text-amber-700 font-medium flex items-center gap-1">
+                          <Lock className="w-3.5 h-3.5" />
+                          Team is at maximum capacity (4/4). Acceptance disabled.
+                        </span>
+                      ) : (
+                        <span>{team ? 4 - team.current_members_count : 1} spot remaining</span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 ml-auto">
+                      <button
+                        onClick={() => handleReview(req.id, "reject")}
+                        className="px-4 py-2 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-700 font-bold text-xs rounded-xl transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" /> Reject
+                      </button>
+
+                      {isTeamFull ? (
+                        <button
+                          type="button"
+                          onClick={() => handleReview(req.id, "approve")}
+                          className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-500 font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-not-allowed transition-colors"
+                          title="Your team is already full. A team can have a maximum of 4 farmers, including the team representative. You cannot accept any more requests."
+                        >
+                          <Lock className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Accept (Team Full)</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleReview(req.id, "approve")}
+                          className="px-5 py-2 bg-agri-700 hover:bg-agri-800 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                        >
+                          <Check className="w-3.5 h-3.5" /> Approve Farmer into Team
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Status notice for resolved requests */}
+                {!isPending && (
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+                    <span>Application status: <strong className="capitalize text-slate-700">{req.status}</strong></span>
+                    {req.reviewed_at && <span>Reviewed on {new Date(req.reviewed_at).toLocaleDateString()}</span>}
+                  </div>
+                )}
               </div>
-
-              {/* Applicant Produce Summary */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs bg-slate-50 p-3.5 rounded-xl border border-slate-100">
-                <div>
-                  <span className="text-slate-400 block text-[10px]">Crop & Variety</span>
-                  <span className="font-bold text-slate-800">{req.crop} ({req.variety})</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[10px]">Quality Grade</span>
-                  <span className="font-bold text-slate-800">Grade {req.grade}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[10px]">Contributed kg</span>
-                  <span className="font-bold text-agri-950">{req.contributed_kg} kg</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[10px]">Harvest Date</span>
-                  <span className="font-bold text-slate-800">{req.harvest_date}</span>
-                </div>
-              </div>
-
-              {/* Match Reasons */}
-              {req.match_reasons && req.match_reasons.length > 0 && (
-                <div className="space-y-1">
-                  <span className="text-[11px] font-bold text-slate-600 block">Identified Synergy:</span>
-                  <ul className="text-xs text-slate-600 space-y-1">
-                    {req.match_reasons.map((r: string, idx: number) => (
-                      <li key={idx} className="flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-agri-600 shrink-0" />
-                        <span>{r}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {req.message && (
-                <div className="p-3 bg-agri-50/50 rounded-xl border border-agri-100 text-xs text-slate-700 italic">
-                  "{req.message}"
-                </div>
-              )}
-
-              {/* Actions */}
-              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
-                <button
-                  onClick={() => handleReview(req.id, "reject")}
-                  className="px-4 py-2 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-700 font-bold text-xs rounded-xl transition-colors flex items-center gap-1"
-                >
-                  <X className="w-3.5 h-3.5" /> Reject
-                </button>
-                <button
-                  onClick={() => handleReview(req.id, "approve")}
-                  className="px-5 py-2 bg-agri-700 hover:bg-agri-800 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5"
-                >
-                  <Check className="w-3.5 h-3.5" /> Approve Farmer into Team
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

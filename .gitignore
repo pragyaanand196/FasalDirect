@@ -9,3 +9,20 @@ venv/
 .next/
 dist/
 build/
+
+# Local databases containing personal/auth data
+*.db
+*.sqlite
+*.sqlite3
+
+# TypeScript build info cache
+*.tsbuildinfo
+
+# Test screenshots and temporary verification scripts
+backend/tests/screenshots/
+backend/tests/capture_*.py
+backend/tests/patch_*.py
+backend/tests/verify_*.py
+backend/tests/set_demo_*.py
+backend/tests/test_concurrency.py
+backend/tests/test_team_capacity.py

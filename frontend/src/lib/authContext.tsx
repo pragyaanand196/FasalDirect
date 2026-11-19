@@ -48,7 +48,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshUser = async () => {
     try {
-      const storedToken = localStorage.getItem("fasaldirect_token");
+      if (typeof window !== "undefined") {
+        // Clear any legacy localStorage token to prevent cross-session leakage
+        localStorage.removeItem("fasaldirect_token");
+      }
+      const storedToken = typeof window !== "undefined" ? sessionStorage.getItem("fasaldirect_token") : null;
       if (storedToken) {
         setToken(storedToken);
         const userData = await api.getMe();
@@ -59,7 +63,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (err) {
       console.error("Failed to load user profile:", err);
-      localStorage.removeItem("fasaldirect_token");
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("fasaldirect_token");
+        localStorage.removeItem("fasaldirect_token");
+      }
       setUser(null);
       setToken(null);
     } finally {
@@ -73,7 +80,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (phone: string, pass: string) => {
     const res = await api.login({ phone, password: pass });
-    localStorage.setItem("fasaldirect_token", res.access_token);
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("fasaldirect_token", res.access_token);
+      localStorage.removeItem("fasaldirect_token");
+    }
     setToken(res.access_token);
     const userData = await api.getMe();
     setUser(userData);
@@ -89,10 +99,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
-    localStorage.removeItem("fasaldirect_token");
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("fasaldirect_token");
+      localStorage.removeItem("fasaldirect_token");
+    }
     setUser(null);
     setToken(null);
-    router.push("/");
+    router.push("/login");
   };
 
   return (

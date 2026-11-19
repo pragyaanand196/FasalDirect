@@ -248,7 +248,7 @@ export default function TeamHubPage() {
         {/* 4 Member Slots Visual Progression */}
         <div className="pt-4 border-t border-slate-100 space-y-2">
           <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
-            <span>4-Farmer Team Capacity ({team.current_members_count}/4 Slots Filled)</span>
+            <span>4-Farmer Team Capacity ({team.current_members_count}/4 Slots Filled{team.current_members_count >= 4 ? " • Team Full" : ""})</span>
             <span className="font-black text-agri-800">{team.combined_quantity_kg.toLocaleString()} kg Aggregated</span>
           </div>
 
